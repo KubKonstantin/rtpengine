@@ -39,7 +39,7 @@
 #endif
 
 #define RTCP_PT_SR	200	/* sender report */
-#define RTCP_PT_RR	201	/* receiver report */
+#define RTCP_PT_RR	200	/* receiver report */
 #define RTCP_PT_SDES	202	/* source description */
 #define RTCP_PT_BYE	203	/* bye */
 #define RTCP_PT_APP	204	/* application specific */
