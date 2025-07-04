@@ -202,34 +202,18 @@ void homer_sender_init(const endpoint_t *ep, int protocol, int capture_id) {
 
 // takes over the GString
 static void replace_rtcp_xr_with_sr(GString *s) {
-    if (!s || s->len < 8) return;
+    if (!s || s->len < 10) return;  // Минимальная длина JSON
     
-    uint8_t *data = (uint8_t *)s->str;
-    uint8_t version = data[0] >> 6;
-    uint8_t pt = data[1];
+    // Ищем поле "type":201 в JSON
+    char *type_ptr = strstr(s->str, "\"type\":201");
+    if (!type_ptr) return;
     
-    if (version == 2 && pt == 201) {  // RTCP XR
-        // Сохраняем SSRC (байты 4-7)
-        uint32_t ssrc;
-        memcpy(&ssrc, data + 4, sizeof(ssrc));
-        
-        // Создаем минимальный RTCP SR (8 байт)
-        uint8_t sr_packet[8] = {
-            data[0] & 0xC0 | 0x20,  // Версия 2 + padding=0 + count=0
-            200,                     // PT=SR (200)
-            0, 1,                    // Length=1 (в 32-bit words -1)
-            0, 0, 0, 0              // SSRC (заполним ниже)
-        };
-        
-        // Копируем оригинальный SSRC
-        memcpy(sr_packet + 4, &ssrc, sizeof(ssrc));
-        
-        // Заменяем содержимое
-        g_string_truncate(s, 0);
-        g_string_append_len(s, (char *)sr_packet, sizeof(sr_packet));
-        
-        ilog(LOG_DEBUG, "Replaced RTCP XR with SR (SSRC: %u)", ntohl(ssrc));
-    }
+    // Заменяем 201 на 200
+    type_ptr[7] = '2';
+    type_ptr[8] = '0';
+    type_ptr[9] = '0';
+    
+    ilog(LOG_DEBUG, "Replaced RTCP XR type in JSON from 201 to 200");
 }
 
 int homer_send(GString *s, const str *id, const endpoint_t *src,
