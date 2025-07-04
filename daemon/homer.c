@@ -42,7 +42,15 @@ static struct homer_sender *main_homer_sender;
 
 static int send_hepv3 (GString *s, const str *id, int, const endpoint_t *src, const endpoint_t *dst,
 		const struct timeval *, int hep_capture_proto);
+ if (hep_capture_proto == PROTO_RTCP && s->len >= 2) {
+        uint8_t *data = (uint8_t *)s->str;
+        uint8_t pt = data[1];  // RTCP-тип находится во втором байте
 
+        if (pt == 201) {  // Если это XR
+            data[1] = 200;  // Меняем на SR
+            ilog(LOG_DEBUG, "HEP: Replaced RTCP XR (201) with SR (200)");
+        }
+ }
 // state handlers
 static int __established(struct homer_sender *hs);
 static int __in_progress(struct homer_sender *hs);
