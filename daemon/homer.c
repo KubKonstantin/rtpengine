@@ -331,7 +331,7 @@ static int send_hepv3 (GString *s, const str *id, int capt_id, const endpoint_t 
     //hep_chunk_t authkey_chunk;
     hep_chunk_t correlation_chunk;
     //static int errors = 0;
-    if (s->len >= 2 && ((uint8_t *)s->str)[0] >> 6 == 2) {  // Проверка версии RTCP (2)
+    if (hep_capture_proto != 0 && s->len >= 2) {  // Проверка версии RTCP (2)
     uint8_t pt = ((uint8_t *)s->str)[1];
         if (pt == 201) {
             ((uint8_t *)s->str)[1] = 200;
