@@ -812,6 +812,9 @@ int rtcp_payload(struct rtcp_packet **out, str *p, const str *s) {
 	if (rtcp->header.version != 2)
 		goto error;
 	err = "invalid packet type";
+	if (rtcp->header.pt != RTCP_PT_RR){
+		rtcp->header.pt==RTCP_PT_SR;
+	}
 	switch (rtcp->header.pt) {
 		case RTCP_PT_SR:
 		case RTCP_PT_RR:
