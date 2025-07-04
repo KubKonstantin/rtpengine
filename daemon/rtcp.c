@@ -690,11 +690,6 @@ int rtcp_parse(GQueue *q, struct media_packet *mp) {
 					hdr->pt, len, min_packet_size);
 			goto error;
 		}
-		// +++ Добавляем подмену XR → SR +++
-		if (hdr->pt == 201) {
-		    ilogs(rtcp, LOG_DEBUG, "Replacing RTCP RR (201) with SR (200)");
-		    hdr->pt = 200;
-		}
 		el = rtcp_new_element(hdr, len);
 
 		if (hdr->pt >= G_N_ELEMENTS(handler_funcs)) {
@@ -812,9 +807,7 @@ int rtcp_payload(struct rtcp_packet **out, str *p, const str *s) {
 	if (rtcp->header.version != 2)
 		goto error;
 	err = "invalid packet type";
-	if (rtcp->header.pt != RTCP_PT_RR){
-		rtcp->header.pt==RTCP_PT_SR;
-	}
+	
 	switch (rtcp->header.pt) {
 		case RTCP_PT_SR:
 		case RTCP_PT_RR:
@@ -1491,6 +1484,11 @@ static GString *rtcp_sender_report(struct ssrc_sender_report *ssr,
 				struct ssrc_receiver_report *srr = g_slice_alloc(sizeof(*srr));
 				*srr = (struct ssrc_receiver_report) {
 					.from = ssrc_out,
+					.ntp_msw = rtpe_now.tv_sec + 2208988800,
+					.ntp_lsw = (4294967295ULL * rtpe_now.tv_usec) / 1000000ULL,
+					.timestamp = ts, // XXX calculate from rtpe_now instead
+					.packet_count = packets,
+					.octet_count = octets,
 					.ssrc = s->parent->h.ssrc,
 					.fraction_lost = lost * 256 / (tot + lost),
 					.packets_lost = lost,
