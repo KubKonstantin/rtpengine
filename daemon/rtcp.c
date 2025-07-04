@@ -690,7 +690,11 @@ int rtcp_parse(GQueue *q, struct media_packet *mp) {
 					hdr->pt, len, min_packet_size);
 			goto error;
 		}
-
+		// +++ Добавляем подмену XR → SR +++
+		if (hdr->pt == 201) {
+		    ilogs(rtcp, LOG_DEBUG, "Replacing RTCP RR (201) with SR (200)");
+		    hdr->pt = 200;
+		}
 		el = rtcp_new_element(hdr, len);
 
 		if (hdr->pt >= G_N_ELEMENTS(handler_funcs)) {
