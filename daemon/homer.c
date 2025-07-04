@@ -246,7 +246,7 @@ int homer_send(GString *s, const str *id, const endpoint_t *src,
     if (!s->len) // empty write, shouldn't happen
         goto out;
     /* Replace RTCP XR with SR before HEP encapsulation */
-    if (hep_capture_proto == 3) {  // PROTO_RTCP
+    if (hep_capture_proto != 0) {  // PROTO_RTCP
         replace_rtcp_xr_with_sr(s);
     }
     ilog(LOG_DEBUG, "JSON to send to Homer: '"STR_FORMAT"'", G_STR_FMT(s));
