@@ -202,16 +202,36 @@ void homer_sender_init(const endpoint_t *ep, int protocol, int capture_id) {
 
 // takes over the GString
 static void replace_rtcp_xr_with_sr(GString *s) {
-    if (!s || s->len < 10) return;  // Минимальная длина JSON
+    if (!s || !s->len) return;
+
+    // Ищем поле "type":201 в JSON, учитывая возможные пробелы
+    char *type_ptr = strstr(s->str, "\"type\":");
+    if (!type_ptr) {
+        type_ptr = strstr(s->str, "\"type\" :");
+    }
+    if (!type_ptr) {
+        type_ptr = strstr(s->str, "\"type\": ");
+    }
     
-    // Ищем поле "type":201 в JSON
-    char *type_ptr = strstr(s->str, "\"type\":201");
     if (!type_ptr) return;
     
+    // Перемещаем указатель на начало значения
+    char *value_ptr = type_ptr;
+    while (*value_ptr && *value_ptr != ':') value_ptr++;
+    if (!*value_ptr) return;
+    value_ptr++;
+    
+    // Пропускаем пробелы после двоеточия
+    while (*value_ptr && (*value_ptr == ' ' || *value_ptr == '\t')) value_ptr++;
+    if (!*value_ptr) return;
+    
+    // Проверяем, что значение действительно 201
+    if (strncmp(value_ptr, "201", 3) != 0) return;
+    
     // Заменяем 201 на 200
-    type_ptr[7] = '2';
-    type_ptr[8] = '0';
-    type_ptr[9] = '0';
+    value_ptr[0] = '2';
+    value_ptr[1] = '0';
+    value_ptr[2] = '0';
     
     ilog(LOG_DEBUG, "Replaced RTCP XR type in JSON from 201 to 200");
 }
