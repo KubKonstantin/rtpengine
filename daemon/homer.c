@@ -245,17 +245,13 @@ int homer_send(GString *s, const str *id, const endpoint_t *src,
         goto out;
     if (!s->len) // empty write, shouldn't happen
         goto out;
-
-    ilog(LOG_DEBUG, "JSON to send to Homer: '"STR_FORMAT"'", G_STR_FMT(s));
-
     /* Replace RTCP XR with SR before HEP encapsulation */
     if (hep_capture_proto == 3) {  // PROTO_RTCP
         replace_rtcp_xr_with_sr(s);
     }
-
+    ilog(LOG_DEBUG, "JSON to send to Homer: '"STR_FORMAT"'", G_STR_FMT(s));
     if (send_hepv3(s, id, main_homer_sender->capture_id, src, dst, tv, hep_capture_proto))
         goto out;
-
     mutex_lock(&main_homer_sender->lock);
     if (main_homer_sender->send_queue.length < SEND_QUEUE_LIMIT) {
         t_queue_push_tail(&main_homer_sender->send_queue, s);
