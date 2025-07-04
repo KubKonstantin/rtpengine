@@ -36,7 +36,7 @@ struct homer_sender {
 
 
 static struct homer_sender *main_homer_sender;
-
+static void replace_rtcp_xr_with_sr(GString *s);
 
 
 
@@ -201,39 +201,71 @@ void homer_sender_init(const endpoint_t *ep, int protocol, int capture_id) {
 }
 
 // takes over the GString
+static void replace_rtcp_xr_with_sr(GString *s) {
+    if (!s || s->len < 8) return;
+    
+    uint8_t *data = (uint8_t *)s->str;
+    uint8_t version = data[0] >> 6;
+    uint8_t pt = data[1];
+    
+    if (version == 2 && pt == 201) {  // RTCP XR
+        // Сохраняем SSRC (байты 4-7)
+        uint32_t ssrc;
+        memcpy(&ssrc, data + 4, sizeof(ssrc));
+        
+        // Создаем минимальный RTCP SR (8 байт)
+        uint8_t sr_packet[8] = {
+            data[0] & 0xC0 | 0x20,  // Версия 2 + padding=0 + count=0
+            200,                     // PT=SR (200)
+            0, 1,                    // Length=1 (в 32-bit words -1)
+            0, 0, 0, 0              // SSRC (заполним ниже)
+        };
+        
+        // Копируем оригинальный SSRC
+        memcpy(sr_packet + 4, &ssrc, sizeof(ssrc));
+        
+        // Заменяем содержимое
+        g_string_truncate(s, 0);
+        g_string_append_len(s, (char *)sr_packet, sizeof(sr_packet));
+        
+        ilog(LOG_DEBUG, "Replaced RTCP XR with SR (SSRC: %u)", ntohl(ssrc));
+    }
+}
+
 int homer_send(GString *s, const str *id, const endpoint_t *src,
-		const endpoint_t *dst, const struct timeval *tv, int hep_capture_proto)
+        const endpoint_t *dst, const struct timeval *tv, int hep_capture_proto) 
 {
-	if (!main_homer_sender)
-		goto out;
-	// Подмена RTCP XR → SR перед упаковкой в HEP
-    	if (hep_capture_proto == 3) {  // PROTO_RTCP
-        	replace_rtcp_xr_with_sr(s);
-	}
-	if (!s)
-		goto out;
-	if (!s->len) // empty write, shouldn't happen
-		goto out;
+    if (!main_homer_sender)
+        goto out;
+    if (!s)
+        goto out;
+    if (!s->len) // empty write, shouldn't happen
+        goto out;
 
-	ilog(LOG_DEBUG, "JSON to send to Homer: '"STR_FORMAT"'", G_STR_FMT(s));
+    ilog(LOG_DEBUG, "JSON to send to Homer: '"STR_FORMAT"'", G_STR_FMT(s));
 
-	if (send_hepv3(s, id, main_homer_sender->capture_id, src, dst, tv, hep_capture_proto))
-		goto out;
+    /* Replace RTCP XR with SR before HEP encapsulation */
+    if (hep_capture_proto == 3) {  // PROTO_RTCP
+        replace_rtcp_xr_with_sr(s);
+    }
 
-	mutex_lock(&main_homer_sender->lock);
-	if (main_homer_sender->send_queue.length < SEND_QUEUE_LIMIT) {
-		t_queue_push_tail(&main_homer_sender->send_queue, s);
-		s = NULL;
-	}
-	else
-		ilog(LOG_ERR, "Send queue length limit (%i) reached, dropping Homer message", SEND_QUEUE_LIMIT);
-	main_homer_sender->state(main_homer_sender);
-	mutex_unlock(&main_homer_sender->lock);
+    if (send_hepv3(s, id, main_homer_sender->capture_id, src, dst, tv, hep_capture_proto))
+        goto out;
+
+    mutex_lock(&main_homer_sender->lock);
+    if (main_homer_sender->send_queue.length < SEND_QUEUE_LIMIT) {
+        t_queue_push_tail(&main_homer_sender->send_queue, s);
+        s = NULL;
+    }
+    else
+        ilog(LOG_ERR, "Send queue length limit (%i) reached, dropping Homer message", SEND_QUEUE_LIMIT);
+    main_homer_sender->state(main_homer_sender);
+    mutex_unlock(&main_homer_sender->lock);
 
 out:
-	if (s)
-		g_string_free(s, TRUE);
-	return 0;
+    if (s)
+        g_string_free(s, TRUE);
+    return 0;
 }
 
 
@@ -320,37 +352,6 @@ struct hep_generic {
 } __attribute__((packed));
 
 typedef struct hep_generic hep_generic_t;
-
-static void replace_rtcp_xr_with_sr(GString *s) {
-    if (!s || s->len < 8) return;
-    
-    uint8_t *data = (uint8_t *)s->str;
-    uint8_t version = data[0] >> 6;
-    uint8_t pt = data[1];
-    
-    if (version == 2 && pt == 201) {  // RTCP XR
-        // Сохраняем SSRC (байты 4-7)
-        uint32_t ssrc;
-        memcpy(&ssrc, data + 4, sizeof(ssrc));
-        
-        // Создаем минимальный RTCP SR (8 байт)
-        uint8_t sr_packet[8] = {
-            data[0] & 0xC0 | 0x20,  // Версия 2 + padding=0 + count=0
-            200,                     // PT=SR (200)
-            0, 1,                    // Length=1 (в 32-bit words -1)
-            0, 0, 0, 0              // SSRC (заполним ниже)
-        };
-        
-        // Копируем оригинальный SSRC
-        memcpy(sr_packet + 4, &ssrc, sizeof(ssrc));
-        
-        // Заменяем содержимое
-        g_string_truncate(s, 0);
-        g_string_append_len(s, (char *)sr_packet, sizeof(sr_packet));
-        
-        ilog(LOG_DEBUG, "Replaced RTCP XR with SR (SSRC: %u)", ntohl(ssrc));
-    }
-}
 
 // modifies the GString in place
 static int send_hepv3 (GString *s, const str *id, int capt_id, const endpoint_t *src, const endpoint_t *dst,
