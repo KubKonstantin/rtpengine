@@ -331,11 +331,32 @@ static int send_hepv3 (GString *s, const str *id, int capt_id, const endpoint_t 
     //hep_chunk_t authkey_chunk;
     hep_chunk_t correlation_chunk;
     //static int errors = 0;
-    if (hep_capture_proto != 0 && s->len >= 2) {  // Проверка версии RTCP (2)
-    uint8_t pt = ((uint8_t *)s->str)[1];
-        if (pt == 201) {
-            ((uint8_t *)s->str)[1] = 200;
-	    ilog(LOG_DEBUG, "HEP: Replaced RTCP XR (201) with SR (200)");
+    if (hep_capture_proto == 3 /* PROTO_RTCP */ && s->len >= 8) {
+        uint8_t *rtcp_data = (uint8_t *)s->str;
+        uint8_t version = rtcp_data[0] >> 6;
+        uint8_t pt = rtcp_data[1];
+        
+        if (version == 2 && pt == 201) {  // Проверяем что это RTCP XR
+            // Сохраняем SSRC (байты 4-7)
+            uint32_t ssrc;
+            memcpy(&ssrc, rtcp_data + 4, sizeof(ssrc));
+            
+            // Создаем минимальный RTCP SR пакет (8 байт заголовок)
+            uint8_t sr_packet[8] = {
+                rtcp_data[0] & 0xC0 | 0x20, // Версия 2 + padding=0 + count=0
+                200,                         // PT=SR (200)
+                0, 1,                        // Length=1 (в 32-bit words -1)
+                0, 0, 0, 0                   // SSRC (заполним ниже)
+            };
+            
+            // Копируем оригинальный SSRC
+            memcpy(sr_packet + 4, &ssrc, sizeof(ssrc));
+            
+            // Заменяем содержимое GString
+            g_string_truncate(s, 0);
+            g_string_append_len(s, (char *)sr_packet, sizeof(sr_packet));
+            
+            ilog(LOG_DEBUG, "HEP: Replaced RTCP XR with SR (SSRC: %u)", ntohl(ssrc));
         }
     }
     hg = malloc(sizeof(struct hep_generic));
