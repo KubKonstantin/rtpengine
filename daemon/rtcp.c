@@ -237,6 +237,7 @@ struct rtcp_process_ctx {
 	// Homer stats
 	GString *json;
 	int json_init_len;
+	unsigned int homer_sender_information_added:1;
 
 	// verdict
 	unsigned int discard:1;
@@ -1040,6 +1041,7 @@ static void scratch_xr_voip_metrics(struct rtcp_process_ctx *ctx, const struct x
 static void homer_init(struct rtcp_process_ctx *ctx) {
 	ctx->json = g_string_new("{ ");
 	ctx->json_init_len = ctx->json->len;
+	ctx->homer_sender_information_added = 0;
 }
 static void homer_sr(struct rtcp_process_ctx *ctx, struct sender_report_packet *sr) {
 	g_string_append_printf(ctx->json, "\"sender_information\":{\"ntp_timestamp_sec\":%u,"
@@ -1049,8 +1051,15 @@ static void homer_sr(struct rtcp_process_ctx *ctx, struct sender_report_packet *
 		ctx->scratch.sr.octet_count,
 		ctx->scratch.sr.timestamp,
 		ctx->scratch.sr.packet_count);
+	ctx->homer_sender_information_added = 1;
 }
 static void homer_rr_list_start(struct rtcp_process_ctx *ctx, const struct rtcp_packet *common) {
+	if (!ctx->homer_sender_information_added) {
+		g_string_append_printf(ctx->json, "\"sender_information\":{\"ntp_timestamp_sec\":%lld,"
+			"\"ntp_timestamp_usec\":%lld,\"octets\":0,\"rtp_timestamp\":0,\"packets\":0},",
+			(long long) (ctx->mp->tv / 1000000LL),
+			(long long) (ctx->mp->tv % 1000000LL));
+	}
 	g_string_append_printf(ctx->json, "\"ssrc\":%u,\"type\":%u,\"report_count\":%u,\"report_blocks\":[",
 		ctx->scratch_common_ssrc,
 		common->header.pt,
