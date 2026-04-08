@@ -1055,10 +1055,11 @@ static void homer_sr(struct rtcp_process_ctx *ctx, struct sender_report_packet *
 }
 static void homer_rr_list_start(struct rtcp_process_ctx *ctx, const struct rtcp_packet *common) {
 	if (!ctx->homer_sender_information_added) {
-		g_string_append_printf(ctx->json, "\"sender_information\":{\"ntp_timestamp_sec\":%lld,"
-			"\"ntp_timestamp_usec\":%lld,\"octets\":0,\"rtp_timestamp\":0,\"packets\":0},",
-			(long long) (ctx->mp->tv / 1000000LL),
-			(long long) (ctx->mp->tv % 1000000LL));
+		uint32_t ntp_msw = (ctx->mp->tv / 1000000LL) + 2208988800U;
+		uint32_t ntp_lsw = 4294967296ULL * (ctx->mp->tv % 1000000LL) / 1000000ULL;
+		g_string_append_printf(ctx->json, "\"sender_information\":{\"ntp_timestamp_sec\":%u,"
+			"\"ntp_timestamp_usec\":%u,\"octets\":0,\"rtp_timestamp\":0,\"packets\":0},",
+			ntp_msw, ntp_lsw);
 	}
 	g_string_append_printf(ctx->json, "\"ssrc\":%u,\"type\":%u,\"report_count\":%u,\"report_blocks\":[",
 		ctx->scratch_common_ssrc,
