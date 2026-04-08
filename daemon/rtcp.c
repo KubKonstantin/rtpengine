@@ -237,6 +237,7 @@ struct rtcp_process_ctx {
 	// Homer stats
 	GString *json;
 	int json_init_len;
+	unsigned int homer_sender_information_added:1;
 
 	// verdict
 	unsigned int discard:1;
@@ -1040,6 +1041,7 @@ static void scratch_xr_voip_metrics(struct rtcp_process_ctx *ctx, const struct x
 static void homer_init(struct rtcp_process_ctx *ctx) {
 	ctx->json = g_string_new("{ ");
 	ctx->json_init_len = ctx->json->len;
+	ctx->homer_sender_information_added = 0;
 }
 static void homer_sr(struct rtcp_process_ctx *ctx, struct sender_report_packet *sr) {
 	g_string_append_printf(ctx->json, "\"sender_information\":{\"ntp_timestamp_sec\":%u,"
@@ -1049,8 +1051,16 @@ static void homer_sr(struct rtcp_process_ctx *ctx, struct sender_report_packet *
 		ctx->scratch.sr.octet_count,
 		ctx->scratch.sr.timestamp,
 		ctx->scratch.sr.packet_count);
+	ctx->homer_sender_information_added = 1;
 }
 static void homer_rr_list_start(struct rtcp_process_ctx *ctx, const struct rtcp_packet *common) {
+	if (!ctx->homer_sender_information_added) {
+		uint32_t ntp_msw = (ctx->mp->tv / 1000000LL) + 2208988800U;
+		uint32_t ntp_lsw = 4294967296ULL * (ctx->mp->tv % 1000000LL) / 1000000ULL;
+		g_string_append_printf(ctx->json, "\"sender_information\":{\"ntp_timestamp_sec\":%u,"
+			"\"ntp_timestamp_usec\":%u,\"octets\":0,\"rtp_timestamp\":0,\"packets\":0},",
+			ntp_msw, ntp_lsw);
+	}
 	g_string_append_printf(ctx->json, "\"ssrc\":%u,\"type\":%u,\"report_count\":%u,\"report_blocks\":[",
 		ctx->scratch_common_ssrc,
 		common->header.pt,
@@ -1073,8 +1083,9 @@ static void homer_rr_list_end(struct rtcp_process_ctx *ctx) {
 	g_string_append_printf(ctx->json, "],");
 }
 static void homer_sdes_list_start(struct rtcp_process_ctx *ctx, const struct source_description_packet *sdes) {
-	g_string_append_printf(ctx->json, "\"sdes_report_count\":%u,\"sdes_information\": [ ",
-		sdes->header.count);
+	uint32_t sdes_ssrc = sdes->header.count > 0 ? htonl(sdes->chunks[0].ssrc) : 0;
+	g_string_append_printf(ctx->json, "\"sdes_ssrc\":%u,\"sdes_report_count\":%u,\"sdes_information\": [ ",
+		sdes_ssrc, sdes->header.count);
 }
 static void homer_sdes_item(struct rtcp_process_ctx *ctx, const struct sdes_chunk *chunk,
 		const struct sdes_item *item, const char *data)
