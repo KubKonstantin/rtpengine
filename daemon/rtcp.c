@@ -1083,8 +1083,9 @@ static void homer_rr_list_end(struct rtcp_process_ctx *ctx) {
 	g_string_append_printf(ctx->json, "],");
 }
 static void homer_sdes_list_start(struct rtcp_process_ctx *ctx, const struct source_description_packet *sdes) {
-	g_string_append_printf(ctx->json, "\"sdes_report_count\":%u,\"sdes_information\": [ ",
-		sdes->header.count);
+	uint32_t sdes_ssrc = sdes->header.count > 0 ? htonl(sdes->chunks[0].ssrc) : 0;
+	g_string_append_printf(ctx->json, "\"sdes_ssrc\":%u,\"sdes_report_count\":%u,\"sdes_information\": [ ",
+		sdes_ssrc, sdes->header.count);
 }
 static void homer_sdes_item(struct rtcp_process_ctx *ctx, const struct sdes_chunk *chunk,
 		const struct sdes_item *item, const char *data)
